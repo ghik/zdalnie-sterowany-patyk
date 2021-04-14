@@ -6,16 +6,16 @@ import monix.execution.Scheduler
 import java.net.InetSocketAddress
 import scala.concurrent.duration.Duration
 
-trait LeftPadAsAService {
+trait LeftPadPatyk {
   def leftPad(text: String, padding: Char, length: Int): Task[String]
 }
-object LeftPadAsAService extends PatykCompanion[LeftPadAsAService]
+object LeftPadPatyk extends PatykCompanion[LeftPadPatyk]
 
 object LeftPadServer {
   implicit def scheduler: Scheduler = Scheduler.global
 
   def main(args: Array[String]): Unit = {
-    val patykImpl = new LeftPadAsAService {
+    val patykImpl = new LeftPadPatyk {
       def leftPad(text: String, padding: Char, length: Int): Task[String] = Task {
         require(length >= 0, s"invalid length: $length")
         if (text.length < length)
@@ -38,14 +38,14 @@ object LeftPadClient {
     patykClient.start()
 
     try {
-      val zdalnieSterowanyPatyk = RawPatyk.asReal[LeftPadAsAService](patykClient)
+      val leftPadPatyk = RawPatyk.asReal[LeftPadPatyk](patykClient)
       val results = Task.parTraverse(List.range(0, 128)) { i =>
-        zdalnieSterowanyPatyk.leftPad(s"foo$i" * 150, '_', 10)
+        leftPadPatyk.leftPad(s"foo$i" * 150, '_', 10)
       }.runSyncUnsafe(Duration.Inf)
 
       println(s"Left-padded: $results")
 
-      println(zdalnieSterowanyPatyk.leftPad("bu", '+', -4).runSyncUnsafe(Duration.Inf))
+      println(leftPadPatyk.leftPad("bu", '+', -4).runSyncUnsafe(Duration.Inf))
     } finally {
       patykClient.shutdown()
       Thread.sleep(1000)
