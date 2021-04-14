@@ -17,7 +17,7 @@ object LeftPadServer {
   def main(args: Array[String]): Unit = {
     val patykImpl = new LeftPadAsAService {
       def leftPad(text: String, padding: Char, length: Int): Task[String] = Task {
-        println(s"happily left-padding $text to length $length with $padding")
+        require(length >= 0, s"invalid length: $length")
         if (text.length < length)
           padding.toString.repeat(length - text.length) + text
         else text
@@ -44,6 +44,9 @@ object LeftPadClient {
     }.runSyncUnsafe(Duration.Inf)
 
     println(s"Left-padded: $results")
+
+    println(zdalnieSterowanyPatyk.leftPad("bu", '+', -4).runSyncUnsafe(Duration.Inf))
+
     patykClient.shutdown()
   }
 }

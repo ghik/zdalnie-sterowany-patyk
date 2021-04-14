@@ -2,17 +2,20 @@ package com.avsystem.patyk
 
 import com.avsystem.commons._
 import com.avsystem.commons.serialization.cbor.{CborOutput, RawCbor}
+import com.typesafe.scalalogging.LazyLogging
 import monix.eval.Task
 
 import java.net.InetSocketAddress
 import java.nio.channels.{ClosedSelectorException, SelectionKey, Selector, SocketChannel}
 import java.util.concurrent.atomic.AtomicInteger
-import scala.concurrent.Promise
 
-class PatykClient(address: InetSocketAddress, connectionPoolSize: Int = 1) extends RawPatyk {
+class PatykClient(
+  address: InetSocketAddress,
+  connectionPoolSize: Int = 1
+) extends RawPatyk with LazyLogging {
   private lazy val selector = Selector.open()
 
-  private class ServerConnection extends BaseBinaryConnection {
+  private class ServerConnection extends PatykConnection {
     protected val channel: SocketChannel = SocketChannel.open(address).setup { ch =>
       ch.configureBlocking(false)
       ch.register(selector, SelectionKey.OP_READ, this)
@@ -20,8 +23,8 @@ class PatykClient(address: InetSocketAddress, connectionPoolSize: Int = 1) exten
 
     protected def selector: Selector = PatykClient.this.selector
 
-    protected def dispatchReadData(data: RawCbor, responsePromise: Opt[Promise[RawCbor]]): Unit =
-      responsePromise.foreach(_.success(data))
+    protected def dispatchRequest(data: RawCbor): Unit =
+      throw new Exception("Unexpected request in PatykClient")
 
     def shutdown(): Unit = channel.shutdownOutput()
   }
@@ -42,7 +45,9 @@ class PatykClient(address: InetSocketAddress, connectionPoolSize: Int = 1) exten
         }
       }
     } catch {
-      case NonFatal(e) => e.printStackTrace()
+      case _: ClosedSelectorException =>
+      case NonFatal(e) =>
+        logger.error("selector failure", e)
     }
   })
 
@@ -54,12 +59,11 @@ class PatykClient(address: InetSocketAddress, connectionPoolSize: Int = 1) exten
   def invoke(invocation: RawPatyk.Invocation): Task[RawCbor] = Task.deferFuture {
     val cbor = RawCbor(CborOutput.write(invocation, RawPatyk.InvocationCborLabels))
     val connectionIdx = roundRobinConnectionIdx.getAndIncrement() % connectionPoolSize
-    val promise = Promise[RawCbor]()
-    connectionPool(connectionIdx).queueWrite(cbor, Opt(promise))
-    promise.future
+    connectionPool(connectionIdx).queueRequest(cbor)
   }
 
   def shutdown(): Unit = {
     connectionPool.foreach(_.shutdown())
+    selector.close()
   }
 }

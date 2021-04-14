@@ -2,33 +2,39 @@ package com.avsystem.patyk
 
 import com.avsystem.commons._
 import com.avsystem.commons.serialization.cbor.{CborInput, RawCbor}
+import com.typesafe.scalalogging.LazyLogging
 import monix.eval.Task
 import monix.execution.Scheduler
 
 import java.net.InetSocketAddress
-import java.nio.channels.{SelectionKey, Selector, ServerSocketChannel, SocketChannel}
+import java.nio.channels._
 
-class PatykServer[T: RawPatyk.AsRawRpc](address: InetSocketAddress, patykImpl: T)(implicit scheduler: Scheduler) {
+class PatykServer[T: RawPatyk.AsRawRpc](
+  address: InetSocketAddress,
+  patykImpl: T
+)(implicit
+  scheduler: Scheduler
+) extends LazyLogging {
+
   private val rawPatyk = RawPatyk.asRaw(patykImpl)
 
   private lazy val selector = Selector.open()
-
   private lazy val serverChannel =
     ServerSocketChannel.open().setup { s =>
       s.configureBlocking(false)
       s.register(selector, SelectionKey.OP_ACCEPT)
     }
 
-  private class ClientConnection(val channel: SocketChannel) extends BaseBinaryConnection {
+  private class ClientConnection(val channel: SocketChannel) extends PatykConnection {
     protected def selector: Selector = PatykServer.this.selector
 
-    protected def dispatchReadData(data: RawCbor, responsePromise: Opt[Promise[RawCbor]]): Unit =
+    protected def dispatchRequest(data: RawCbor): Unit =
       Task.defer {
         val invocation = CborInput.read[RawPatyk.Invocation](data.bytes, RawPatyk.InvocationCborLabels)
         rawPatyk.invoke(invocation)
       }.runAsync {
-        case Right(response) => queueWrite(response, Opt.Empty)
-        case Left(_) => //TODO: send the failure back somehow
+        case Right(response) => queueResponse(response)
+        case Left(cause) => queueError(cause)
       }
   }
 
@@ -39,7 +45,7 @@ class PatykServer[T: RawPatyk.AsRawRpc](address: InetSocketAddress, patykImpl: T
           val channel = key.channel.asInstanceOf[ServerSocketChannel].accept()
           channel.configureBlocking(false)
           channel.register(selector, SelectionKey.OP_READ, new ClientConnection(channel))
-          println(s"accepted new connection: ${channel.getRemoteAddress}")
+          logger.debug(s"accepted new connection: ${channel.getRemoteAddress}")
         }
         else if (key.isReadable) {
           key.attachment.asInstanceOf[ClientConnection].doRead(key)
@@ -49,8 +55,9 @@ class PatykServer[T: RawPatyk.AsRawRpc](address: InetSocketAddress, patykImpl: T
         }
       }
     } catch {
+      case _: ClosedSelectorException =>
       case NonFatal(e) =>
-        e.printStackTrace()
+        logger.error("selector failure", e)
     }
   })
 

@@ -7,6 +7,8 @@ import com.avsystem.commons.serialization.GenCodec
 import com.avsystem.commons.serialization.cbor.{CborOutput, FieldLabels, RawCbor}
 import monix.eval.Task
 
+import scala.util.control.NoStackTrace
+
 trait RawPatyk {
   @multi @encoded
   def invoke(@composite invocation: RawPatyk.Invocation): Task[RawCbor]
@@ -41,6 +43,9 @@ object RawPatyk extends RawRpcCompanion[RawPatyk] {
 
   implicit val invocationCodec: GenCodec[Invocation] = GenCodec.materialize
 }
+
+case class PatykException(message: String, cause: Throwable = null)
+  extends Exception(message, cause) with NoStackTrace
 
 trait PatykImplicits {
   implicit def asRawCbor[T: GenCodec]: AsRawReal[RawCbor, T] =

@@ -4,6 +4,7 @@ ideBasePackages := Seq("com.avsystem.patyk")
 
 val avsCommonsVersion = "2.1.0"
 val monixVersion = "3.3.0"
+val scalaLoggingVersion = "3.9.3"
 
 Compile / scalacOptions ++= Seq(
   "-encoding", "utf-8",
@@ -28,4 +29,5 @@ Compile / scalacOptions ++= Seq(
 libraryDependencies ++= Seq(
   "com.avsystem.commons" %% "commons-core" % avsCommonsVersion,
   "io.monix" %% "monix" % monixVersion,
+  "com.typesafe.scala-logging" %% "scala-logging" % scalaLoggingVersion
 )
