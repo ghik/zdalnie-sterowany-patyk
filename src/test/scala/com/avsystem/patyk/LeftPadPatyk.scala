@@ -48,7 +48,6 @@ object LeftPadClient {
       println(leftPadPatyk.leftPad("bu", '+', -4).runSyncUnsafe(Duration.Inf))
     } finally {
       patykClient.shutdown()
-      Thread.sleep(1000)
     }
   }
 }
