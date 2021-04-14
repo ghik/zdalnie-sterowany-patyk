@@ -16,12 +16,12 @@ class PatykClient(
   private lazy val selector = Selector.open()
 
   private class ServerConnection extends PatykConnection {
-    protected val channel: SocketChannel = SocketChannel.open(address).setup { ch =>
+    val channel: SocketChannel = SocketChannel.open().setup { ch =>
       ch.configureBlocking(false)
-      ch.register(selector, SelectionKey.OP_READ, this)
+      ch.register(selector, SelectionKey.OP_CONNECT | SelectionKey.OP_READ, this)
     }
 
-    protected def selector: Selector = PatykClient.this.selector
+    def selector: Selector = PatykClient.this.selector
 
     protected def dispatchRequest(data: RawCbor): Unit =
       throw new Exception("Unexpected request in PatykClient")
@@ -37,7 +37,10 @@ class PatykClient(
   private val eventDispatcherThread = new Thread(() => {
     try while (selector.isOpen) {
       selector.select { (key: SelectionKey) =>
-        if (key.isReadable) {
+        if (key.isConnectable) {
+          key.attachment.asInstanceOf[ServerConnection].channel.finishConnect()
+        }
+        else if (key.isReadable) {
           key.attachment.asInstanceOf[ServerConnection].doRead(key)
         }
         else if (key.isWritable) {
@@ -47,12 +50,13 @@ class PatykClient(
     } catch {
       case _: ClosedSelectorException =>
       case NonFatal(e) =>
+        //TODO: report this failure or sth
         logger.error("selector failure", e)
     }
   }).setup(_.setDaemon(true))
 
   def start(): Unit = {
-    connectionPool
+    connectionPool.foreach(_.connect(address))
     eventDispatcherThread.start()
   }
 

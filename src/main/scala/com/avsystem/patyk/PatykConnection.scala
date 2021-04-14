@@ -5,6 +5,7 @@ import com.avsystem.commons.serialization.cbor.RawCbor
 import com.avsystem.patyk.PatykConnection._
 import com.typesafe.scalalogging.LazyLogging
 
+import java.net.InetSocketAddress
 import java.nio.ByteBuffer
 import java.nio.channels.{SelectionKey, Selector, SocketChannel}
 import java.nio.charset.StandardCharsets
@@ -19,16 +20,15 @@ object PatykConnection {
   )
 
   final val HeaderSize = 3
-  final val BufferSize = 4096
+  final val BufferSize = 1024 * 1024
   final val MaxMessageSize = BufferSize - HeaderSize
 }
 abstract class PatykConnection extends LazyLogging {
-  protected def channel: SocketChannel
-  protected def selector: Selector
+  def channel: SocketChannel
+  def selector: Selector
 
   protected def dispatchRequest(data: RawCbor): Unit
 
-  // assuming that requests are not larger than 4096 bytes
   private val readBuffer: ByteBuffer = ByteBuffer.allocate(BufferSize).limit(HeaderSize)
   private var readingHeader = true
   private var msgType: MessageType = _
@@ -37,7 +37,10 @@ abstract class PatykConnection extends LazyLogging {
   private val writeQueue = new ConcurrentLinkedDeque[QueuedWrite]
   private val responseQueue = new JArrayDeque[Promise[RawCbor]] // this one doesn't need to be concurrent
 
-  final def doRead(key: SelectionKey): Unit = {
+  def connect(address: InetSocketAddress): Unit =
+    channel.connect(address)
+
+  def doRead(key: SelectionKey): Unit = {
     @tailrec def loop(): Unit = {
       val read = channel.read(readBuffer)
       // remaining == 0 means we have all the bytes that we need to proceed
@@ -65,7 +68,7 @@ abstract class PatykConnection extends LazyLogging {
       } else if (read < 0) {
         logger.debug(s"connection ${channel.getRemoteAddress} closed")
         key.cancel()
-        channel.close()
+        channel.close() // TODO: this causes a RST to be sent, can we do this gracefully?
       }
     }
 

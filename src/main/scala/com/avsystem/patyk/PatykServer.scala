@@ -26,7 +26,7 @@ class PatykServer[T: RawPatyk.AsRawRpc](
     }
 
   private class ClientConnection(val channel: SocketChannel) extends PatykConnection {
-    protected def selector: Selector = PatykServer.this.selector
+    def selector: Selector = PatykServer.this.selector
 
     protected def dispatchRequest(data: RawCbor): Unit =
       Task.defer {

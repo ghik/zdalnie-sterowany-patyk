@@ -34,19 +34,21 @@ object LeftPadClient {
   implicit def scheduler: Scheduler = Scheduler.global
 
   def main(args: Array[String]): Unit = {
-    val patykClient = new PatykClient(new InetSocketAddress(6969), 16)
+    val patykClient = new PatykClient(new InetSocketAddress(6969), 8)
     patykClient.start()
 
-    val zdalnieSterowanyPatyk = RawPatyk.asReal[LeftPadAsAService](patykClient)
+    try {
+      val zdalnieSterowanyPatyk = RawPatyk.asReal[LeftPadAsAService](patykClient)
+      val results = Task.parTraverse(List.range(0, 128)) { i =>
+        zdalnieSterowanyPatyk.leftPad(s"foo$i" * 150, '_', 10)
+      }.runSyncUnsafe(Duration.Inf)
 
-    val results = Task.parTraverse(List.range(0, 128)) { i =>
-      zdalnieSterowanyPatyk.leftPad(s"foo$i", '_', 10)
-    }.runSyncUnsafe(Duration.Inf)
+      println(s"Left-padded: $results")
 
-    println(s"Left-padded: $results")
-
-    println(zdalnieSterowanyPatyk.leftPad("bu", '+', -4).runSyncUnsafe(Duration.Inf))
-
-    patykClient.shutdown()
+      println(zdalnieSterowanyPatyk.leftPad("bu", '+', -4).runSyncUnsafe(Duration.Inf))
+    } finally {
+      patykClient.shutdown()
+      Thread.sleep(1000)
+    }
   }
 }
