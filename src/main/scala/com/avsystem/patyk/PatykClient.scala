@@ -49,7 +49,7 @@ class PatykClient(
       case NonFatal(e) =>
         logger.error("selector failure", e)
     }
-  })
+  }).setup(_.setDaemon(true))
 
   def start(): Unit = {
     connectionPool
