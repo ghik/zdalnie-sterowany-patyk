@@ -114,12 +114,12 @@ abstract class PatykConnection extends LazyLogging {
 
   def queueRequest(data: RawCbor): Future[RawCbor] = {
     val promise = Promise[RawCbor]()
-    queueWrite(MessageType.Request, data.bytes, promise.opt)
+    queueWrite(MessageType.Request, data.compact.bytes, promise.opt)
     promise.future
   }
 
   def queueResponse(data: RawCbor): Unit =
-    queueWrite(MessageType.Response, data.bytes, Opt.Empty)
+    queueWrite(MessageType.Response, data.compact.bytes, Opt.Empty)
 
   def queueError(cause: Throwable): Unit = {
     val errorMsg = cause match {

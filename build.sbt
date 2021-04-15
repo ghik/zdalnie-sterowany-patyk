@@ -2,7 +2,7 @@ scalaVersion := "2.13.5"
 organization := "com.avsystem.patyk"
 ideBasePackages := Seq("com.avsystem.patyk")
 
-val avsCommonsVersion = "2.1.0"
+val avsCommonsVersion = "2.1.1"
 val monixVersion = "3.3.0"
 val scalaLoggingVersion = "3.9.3"
 val logbackVersion = "1.2.3"

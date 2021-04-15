@@ -33,14 +33,6 @@ object RawPatyk extends RawRpcCompanion[RawPatyk] {
     }
   }
 
-  private implicit val rawCborCodec: GenCodec[RawCbor] =
-    GenCodec.nonNull(
-      input => input.readCustom(RawCbor).getOrElse(RawCbor(input.readSimple().readBinary())),
-      (output, cbor) => if (!output.writeCustom(RawCbor, cbor)) {
-        output.writeSimple().writeBinary(cbor.bytes.slice(cbor.offset, cbor.length))
-      }
-    )
-
   implicit val invocationCodec: GenCodec[Invocation] = GenCodec.materialize
 }
 

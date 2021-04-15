@@ -1,7 +1,8 @@
 package com.avsystem.patyk
 
 import com.avsystem.commons._
-import com.avsystem.commons.serialization.cbor.{CborInput, RawCbor}
+import com.avsystem.commons.serialization.GenCodec
+import com.avsystem.commons.serialization.cbor.{CborInput, CborReader, RawCbor}
 import com.typesafe.scalalogging.LazyLogging
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -30,7 +31,8 @@ class PatykServer[T: RawPatyk.AsRawRpc](
 
     protected def dispatchRequest(data: RawCbor): Unit =
       Task.defer {
-        val invocation = CborInput.read[RawPatyk.Invocation](data.bytes, RawPatyk.InvocationCborLabels)
+        val cborInput = new CborInput(new CborReader(data), RawPatyk.InvocationCborLabels)
+        val invocation = GenCodec.read[RawPatyk.Invocation](cborInput)
         rawPatyk.invoke(invocation)
       }.runAsync {
         case Right(response) => queueResponse(response)
