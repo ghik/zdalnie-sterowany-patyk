@@ -135,4 +135,11 @@ abstract class PatykConnection extends LazyLogging {
     channel.keyFor(selector).interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE)
     selector.wakeup()
   }
+
+  def shutdown(cause: Throwable): Unit = {
+    channel.shutdownOutput()
+    while (!responseQueue.isEmpty) {
+      responseQueue.pollFirst().failure(cause)
+    }
+  }
 }

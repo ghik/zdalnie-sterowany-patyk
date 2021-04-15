@@ -25,8 +25,6 @@ class PatykClient(
 
     protected def dispatchRequest(data: RawCbor): Unit =
       throw new Exception("Unexpected request in PatykClient")
-
-    def shutdown(): Unit = channel.shutdownOutput()
   }
 
   private lazy val connectionPool =
@@ -50,7 +48,7 @@ class PatykClient(
     } catch {
       case _: ClosedSelectorException =>
       case NonFatal(e) =>
-        //TODO: report this failure or sth
+        connectionPool.foreach(_.shutdown(e))
         logger.error("selector failure", e)
     }
   }).setup(_.setDaemon(true))
@@ -67,7 +65,7 @@ class PatykClient(
   }
 
   def shutdown(): Unit = {
-    connectionPool.foreach(_.shutdown())
+    connectionPool.foreach(_.shutdown(new Exception("the client was shut down")))
     selector.close()
   }
 }
