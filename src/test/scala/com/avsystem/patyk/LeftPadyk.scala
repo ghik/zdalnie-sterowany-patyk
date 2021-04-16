@@ -49,12 +49,9 @@ object LeftPadClient {
       val leftPadyk: LeftPadyk = RawPatyk.asReal[LeftPadyk](patykClient)
 
       val results = Task.parTraverse(List.range(0, 128)) { i =>
-        leftPadyk.leftPad(s"foo$i" * 150, '_', 10)
+        leftPadyk.leftPad(s"foo$i", '_', 10).foreachL(s => println(s"Left padded: $s"))
       }.runSyncUnsafe(Duration.Inf)
 
-      println(s"Left-padded: $results")
-
-      println(leftPadyk.leftPad("bu", '+', -4).runSyncUnsafe(Duration.Inf))
     } finally {
       patykClient.shutdown()
     }

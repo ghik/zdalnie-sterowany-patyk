@@ -19,7 +19,7 @@ object PatykConnection {
     responsePromise: Opt[Promise[RawCbor]]
   )
 
-  final val HeaderSize = 3
+  final val HeaderSize = 5
   final val BufferSize = 1024 * 1024
   final val MaxMessageSize = BufferSize - HeaderSize
 }
@@ -46,8 +46,9 @@ abstract class PatykConnection extends LazyLogging {
       // remaining == 0 means we have all the bytes that we need to proceed
       if (read > 0 && readBuffer.remaining() == 0) {
         if (readingHeader) {
-          msgType = MessageType.values(readBuffer.get(0))
-          val dataLen = readBuffer.getShort(1)
+          readBuffer.rewind()
+          msgType = MessageType.values(readBuffer.get())
+          val dataLen = readBuffer.getInt()
           require(dataLen >= 0 && dataLen <= MaxMessageSize)
           readBuffer.rewind().limit(dataLen)
           readingHeader = false
@@ -87,7 +88,7 @@ abstract class PatykConnection extends LazyLogging {
         val QueuedWrite(msgType, data, responsePromise) = writeQueue.pollFirst()
         responsePromise.foreach(responseQueue.addLast)
         writeBuffer.rewind().limit(HeaderSize + data.length)
-          .put(msgType.ordinal.toByte).putShort(data.length.toShort).put(data).rewind()
+          .put(msgType.ordinal.toByte).putInt(data.length).put(data).rewind()
       }
 
       // check if there's anything to write
