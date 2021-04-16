@@ -99,11 +99,11 @@ abstract class PatykConnection extends LazyLogging {
           loop()
         } else {
           // could not write anything this time, subscribe to OP_WRITE and wait for another opportunity
-          key.interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE)
+          key.interestOpsOr(SelectionKey.OP_WRITE)
         }
       } else {
         // nothing else to write, unsubscribe from OP_WRITE
-        key.interestOps(SelectionKey.OP_READ)
+        key.interestOpsAnd(~SelectionKey.OP_WRITE)
       }
     }
     try loop() catch {
@@ -133,7 +133,7 @@ abstract class PatykConnection extends LazyLogging {
   private def queueWrite(msgType: MessageType, data: Array[Byte], responsePromise: Opt[Promise[RawCbor]]): Unit = {
     writeQueue.addLast(QueuedWrite(msgType, data, responsePromise))
     // TODO: maybe there is a safe way to avoid doing the wakeup() every single time
-    channel.keyFor(selector).interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE)
+    channel.keyFor(selector).interestOpsOr(SelectionKey.OP_WRITE)
     selector.wakeup()
   }
 
