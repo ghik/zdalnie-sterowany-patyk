@@ -23,7 +23,7 @@ class PatykClient(
 
     def selector: Selector = PatykClient.this.selector
 
-    protected def dispatchRequest(data: RawCbor): Unit =
+    protected def dispatchRequest(reqId: Int, data: RawCbor): Unit =
       throw new Exception("Unexpected request in PatykClient")
   }
 

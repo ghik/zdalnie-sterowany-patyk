@@ -10,16 +10,19 @@ import java.nio.ByteBuffer
 import java.nio.channels.{SelectionKey, Selector, SocketChannel}
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.ConcurrentLinkedDeque
+import java.util.concurrent.atomic.AtomicInteger
 import scala.annotation.tailrec
+import scala.collection.mutable
 
 object PatykConnection {
   private case class QueuedWrite(
     msgType: MessageType,
+    reqId: Int,
     data: Array[Byte],
     responsePromise: Opt[Promise[RawCbor]]
   )
 
-  final val HeaderSize = 5
+  final val HeaderSize = 1 + 4 + 4 // message type + request id + payload length
   final val BufferSize = 1024 * 1024
   final val MaxMessageSize = BufferSize - HeaderSize
 }
@@ -27,15 +30,17 @@ abstract class PatykConnection extends LazyLogging {
   def channel: SocketChannel
   def selector: Selector
 
-  protected def dispatchRequest(data: RawCbor): Unit
+  protected def dispatchRequest(id: Int, data: RawCbor): Unit
 
   private val readBuffer: ByteBuffer = ByteBuffer.allocate(BufferSize).limit(HeaderSize)
   private var readingHeader = true
   private var msgType: MessageType = _
+  private var requestId: Int = _
 
   private val writeBuffer: ByteBuffer = ByteBuffer.allocate(BufferSize).limit(0)
   private val writeQueue = new ConcurrentLinkedDeque[QueuedWrite]
-  private val responseQueue = new JArrayDeque[Promise[RawCbor]] // this one doesn't need to be concurrent
+  private val responsePromises = new mutable.LongMap[Promise[RawCbor]] // this one doesn't need to be concurrent
+  private val nextRequestId = new AtomicInteger(0)
 
   def connect(address: InetSocketAddress): Unit =
     channel.connect(address)
@@ -48,6 +53,7 @@ abstract class PatykConnection extends LazyLogging {
         if (readingHeader) {
           readBuffer.rewind()
           msgType = MessageType.values(readBuffer.get())
+          requestId = readBuffer.getInt()
           val dataLen = readBuffer.getInt()
           require(dataLen >= 0 && dataLen <= MaxMessageSize)
           readBuffer.rewind().limit(dataLen)
@@ -58,11 +64,11 @@ abstract class PatykConnection extends LazyLogging {
           readingHeader = true
           msgType match {
             case MessageType.Request =>
-              dispatchRequest(RawCbor(bytes))
+              dispatchRequest(requestId, RawCbor(bytes))
             case MessageType.Response =>
-              responseQueue.pollFirst().success(RawCbor(bytes))
+              responsePromises.remove(requestId).foreach(_.success(RawCbor(bytes)))
             case MessageType.Error =>
-              responseQueue.pollFirst().failure(PatykException(new String(bytes, StandardCharsets.UTF_8)))
+              responsePromises.remove(requestId).foreach(_.failure(PatykException(new String(bytes, StandardCharsets.UTF_8))))
           }
         }
         loop()
@@ -85,10 +91,10 @@ abstract class PatykConnection extends LazyLogging {
       // writeBuffer.remaining() == 0 means that this buffer has been fully written
       // try fetching the next queued write and fill the buffer
       if (writeBuffer.remaining() == 0 && !writeQueue.isEmpty) {
-        val QueuedWrite(msgType, data, responsePromise) = writeQueue.pollFirst()
-        responsePromise.foreach(responseQueue.addLast)
+        val QueuedWrite(msgType, reqId, data, responsePromise) = writeQueue.pollFirst()
+        responsePromise.foreach(responsePromises.update(reqId, _))
         writeBuffer.rewind().limit(HeaderSize + data.length)
-          .put(msgType.ordinal.toByte).putInt(data.length).put(data).rewind()
+          .put(msgType.ordinal.toByte).putInt(reqId).putInt(data.length).put(data).rewind()
       }
 
       // check if there's anything to write
@@ -115,23 +121,23 @@ abstract class PatykConnection extends LazyLogging {
 
   def queueRequest(data: RawCbor): Future[RawCbor] = {
     val promise = Promise[RawCbor]()
-    queueWrite(MessageType.Request, data.compact.bytes, promise.opt)
+    queueWrite(MessageType.Request, nextRequestId.getAndIncrement(), data.compact.bytes, promise.opt)
     promise.future
   }
 
-  def queueResponse(data: RawCbor): Unit =
-    queueWrite(MessageType.Response, data.compact.bytes, Opt.Empty)
+  def queueResponse(reqId: Int, data: RawCbor): Unit =
+    queueWrite(MessageType.Response, reqId, data.compact.bytes, Opt.Empty)
 
-  def queueError(cause: Throwable): Unit = {
+  def queueError(reqId: Int, cause: Throwable): Unit = {
     val errorMsg = cause match {
       case PatykException(msg, _) => msg
       case _ => s"${cause.getClass.getSimpleName}: ${cause.getMessage}"
     }
-    queueWrite(MessageType.Error, errorMsg.getBytes(StandardCharsets.UTF_8), Opt.Empty)
+    queueWrite(MessageType.Error, reqId, errorMsg.getBytes(StandardCharsets.UTF_8), Opt.Empty)
   }
 
-  private def queueWrite(msgType: MessageType, data: Array[Byte], responsePromise: Opt[Promise[RawCbor]]): Unit = {
-    writeQueue.addLast(QueuedWrite(msgType, data, responsePromise))
+  private def queueWrite(msgType: MessageType, reqId: Int, data: Array[Byte], responsePromise: Opt[Promise[RawCbor]]): Unit = {
+    writeQueue.addLast(QueuedWrite(msgType, reqId, data, responsePromise))
     // TODO: maybe there is a safe way to avoid doing the wakeup() every single time
     channel.keyFor(selector).interestOpsOr(SelectionKey.OP_WRITE)
     selector.wakeup()
@@ -139,8 +145,7 @@ abstract class PatykConnection extends LazyLogging {
 
   def shutdown(cause: Throwable): Unit = {
     channel.shutdownOutput()
-    while (!responseQueue.isEmpty) {
-      responseQueue.pollFirst().failure(cause)
-    }
+    responsePromises.foreachValue(_.failure(cause))
+    responsePromises.clear()
   }
 }

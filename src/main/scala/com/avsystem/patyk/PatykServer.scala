@@ -29,14 +29,14 @@ class PatykServer[T: RawPatyk.AsRawRpc](
   private class ClientConnection(val channel: SocketChannel) extends PatykConnection {
     def selector: Selector = PatykServer.this.selector
 
-    protected def dispatchRequest(data: RawCbor): Unit =
+    protected def dispatchRequest(reqId: Int, data: RawCbor): Unit =
       Task.defer {
         val cborInput = new CborInput(new CborReader(data), RawPatyk.InvocationCborLabels)
         val invocation = GenCodec.read[RawPatyk.Invocation](cborInput)
         rawPatyk.invoke(invocation)
       }.runAsync {
-        case Right(response) => queueResponse(response)
-        case Left(cause) => queueError(cause)
+        case Right(response) => queueResponse(reqId, response)
+        case Left(cause) => queueError(reqId, cause)
       }
   }
 
