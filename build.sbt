@@ -46,6 +46,7 @@ lazy val leftpad = project
   .settings(
     Compile / mainClass := Some("com.avsystem.patyk.LeftPadServer"),
 
+    dockerRepository := Some("rjghik"),
     dockerBaseImage := "openjdk:11",
     dockerExposedPorts := Seq(6969),
   )
