@@ -47,8 +47,9 @@ lazy val leftpad = project
     Compile / mainClass := Some("com.avsystem.patyk.LeftPadServer"),
 
     dockerRepository := Some("rjghik"),
+    dockerUpdateLatest := true,
     dockerBaseImage := "openjdk:11",
     dockerExposedPorts := Seq(6969),
+    dockerEnvVars := Map("PATYK_DATA_DIR" -> "/mnt/data"),
+    dockerExposedVolumes := Seq("$PATYK_DATA_DIR")
   )
-
-
