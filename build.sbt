@@ -1,10 +1,11 @@
-val avsCommonsVersion = "2.1.1"
+val avsCommonsVersion = "2.2.4"
 val monixVersion = "3.3.0"
 val scalaLoggingVersion = "3.9.3"
 val logbackVersion = "1.2.3"
+val scalatestVersion = "3.2.9"
 
 inThisBuild(Seq(
-  scalaVersion := "2.13.5",
+  scalaVersion := "2.13.6",
   organization := "com.avsystem.patyk",
 
   Compile / scalacOptions ++= Seq(
@@ -37,6 +38,7 @@ lazy val core = project.settings(
     "io.monix" %% "monix" % monixVersion,
     "com.typesafe.scala-logging" %% "scala-logging" % scalaLoggingVersion,
     "ch.qos.logback" % "logback-classic" % logbackVersion,
+    "org.scalatest" %% "scalatest" % scalatestVersion
   )
 )
 

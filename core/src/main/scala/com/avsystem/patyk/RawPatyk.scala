@@ -46,8 +46,8 @@ trait PatykImplicits {
       c => GenCodec.read[T](c.createInput(FieldLabels.NoLabels))
     )
 
-  implicit def asRawCborTask[T: GenCodec]: AsRawReal[Task[RawCbor], Task[T]] =
-    AsRawReal.create(_.map(asRawCbor[T].asRaw), _.map(asRawCbor[T].asReal))
+  implicit def asRawCborTask[T](implicit asRawReal: AsRawReal[RawCbor, T]): AsRawReal[Task[RawCbor], Task[T]] =
+    AsRawReal.create(_.map(asRawReal.asRaw), _.map(asRawReal.asReal))
 }
 object PatykImplicits extends PatykImplicits
 
