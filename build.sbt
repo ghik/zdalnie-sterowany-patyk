@@ -30,7 +30,7 @@ inThisBuild(Seq(
 ))
 
 lazy val root = project.in(file("."))
-  .aggregate(core, leftpad)
+  .aggregate(core, leftpad, ecdhe)
 
 lazy val core = project.settings(
   libraryDependencies ++= Seq(
@@ -55,3 +55,6 @@ lazy val leftpad = project
     dockerEnvVars := Map("PATYK_DATA_DIR" -> "/mnt/data"),
     dockerExposedVolumes := Seq("$PATYK_DATA_DIR")
   )
+
+lazy val ecdhe = project
+  .dependsOn(core)
